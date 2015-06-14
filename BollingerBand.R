@@ -12,11 +12,11 @@ endDate = as.Date("12/31/2009",format="%m/%d/%Y")
 beginDate = as.Date("1/1/2008",format="%m/%d/%Y")
 startDate = beginDate- (lookback+10)
 
- asset.vec = list(stock = c("AAPL","MSFT"))
+asset.vec = list(stock = c("AAPL","MSFT"))
   
 #   asset.vec = read.csv("shinyApp/sp5002012.csv")
 
-  st = mapply(SIMPLIFY=FALSE ,as.character(asset.vec$stock)  ,FUN=function(x)tryCatch(getStockHist(stk=x,sdate=startDate,edate=endDate,pricetype="Adj.Close") ,error=function(e)return(NA)))
+st = mapply(SIMPLIFY=FALSE ,as.character(asset.vec$stock)  ,FUN=function(x)tryCatch(getStockHist(stk=x,sdate=startDate,edate=endDate,pricetype="Adj.Close") ,error=function(e)return(NA)))
 
 countofobs = as.numeric(names(which.max(table(sapply(sapply(st, "[", 2),length)))))
 # which(sapply(sapply(st, "[", 2),length)!=countofobs)  # Indices that are unequal to most others should be removed
@@ -69,7 +69,7 @@ Bollinger_AAPL = (stkval[1,paste0("AAPL",".price")] - roll.mean["AAPL.price"]) /
 
 Bollinger_MSFT = (stkval[1,paste0("MSFT",".price")] - roll.mean["MSFT.price"]) / (roll.sd["MSFT.price"]) 
 
-getBollingerValue(asset = c("SPY","A") ,startDate = startDate,endDate=endDate,lookback = 20)
+getBollingerValue(asset = c("SPY","A") ,startDate = startDate,endDate=Sys.Date(),lookback = 20)
 
 
 

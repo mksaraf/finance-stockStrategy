@@ -4,9 +4,11 @@ source('https://github.com/vishalhawa/utilities/raw/master/util.R')
 
 rollingAvgShort = 50
 rollingAvgLong = 200
-
 idxrange = 20 # of observations from current date 
-asset = c("uso","pfe")
+proximity = 0.02 # distance threshold between long and short averages
+
+# Min 2 assets are required
+asset = c("^dji","twtr")
 
 endDate = Sys.Date()
 startDate = endDate - 2*rollingAvgLong # we need to take more dates than needed to avoid errors
@@ -29,9 +31,19 @@ stkprices = as.matrix(sapply(c(1:idxrange),function(x){stkval[x,paste0(asset.vec
 
 percentileMatrix = (rollmeanShort-rollmeanLong)/rollmeanLong
 
-slopeShort = diff(rollmeanShort[nrow(rollmeanShort):1,])
+percentileMatrix.proximity = abs(percentileMatrix) < proximity
 
-slopeLong = diff(rollmeanLong[nrow(rollmeanLong):1,])
+slopeShort = diff(-1*rollmeanShort)
 
+slopeLong = diff(-1*rollmeanLong)
+
+
+# ifelse(slopeLong[1,] <0 & slopeShort[1,] <0,  print("Negative Slopes"),  ifelse(slopeLong[1,] >0 & slopeShort[1,] >0,print("Positive Slopes")  ,    print("Mixed Slopes")))
+
+# the slopeMatrix provides wether long and short slopes are both positive , negative or Mixed
+slopeMatrix = ifelse(slopeLong <0 & slopeShort <0, -1,  ifelse(slopeLong>0 & slopeShort>0,1  ,  0))
+
+
+apply(slopeMatrix*percentileMatrix.proximity[1:idxrange-1,], c(1,2), function(x)(if(x>0) print("Golden Cross") else if(x<0) print("Death Cross")))
 
 

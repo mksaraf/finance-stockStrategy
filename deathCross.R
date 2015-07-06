@@ -8,14 +8,19 @@ idxrange = 20 # of observations from current date
 proximity = 0.02 # distance threshold between long and short averages
 
 # Min 2 assets are required
-asset = c("^dji","twtr")
+asset = c("twtr","BABA","BBBY") 
+asset = append(asset,"^dji")
 
 endDate = Sys.Date()
 startDate = endDate - 2*rollingAvgLong # we need to take more dates than needed to avoid errors
 
 st = mapply(SIMPLIFY=FALSE ,as.character(asset)  ,FUN=function(x)tryCatch(getStockHist(stk=x,sdate=startDate,edate=endDate,pricetype="Adj.Close") ,error=function(e)return(NA)))
 
-stkval= do.call("cbind",st) #issue: if number of values differ in 'st' then this function throws error
+#issue: removing symbol if number of values is less than ^dji (less than 1 yr) 
+
+st <- st[-which(lapply(st[],  function(row) { nrow(st[["^dji"]]) > nrow(row)  }) %in% TRUE )]
+
+stkval= do.call("cbind",st) 
 asset.vec.rv = names(st)
 stkval= stkval[order(stkval[1],decreasing=T),]
 
@@ -43,7 +48,7 @@ slopeLong = diff(-1*rollmeanLong)
 # the slopeMatrix provides wether long and short slopes are both positive , negative or Mixed
 slopeMatrix = ifelse(slopeLong <0 & slopeShort <0, -1,  ifelse(slopeLong>0 & slopeShort>0,1  ,  0))
 
-
+# This produces table of Death and Golden Cross
 apply(slopeMatrix*percentileMatrix.proximity[1:idxrange-1,], c(1,2), function(x)(if(x>0) print("Golden Cross") else if(x<0) print("Death Cross")))
 
-
+# -------------------EOF ---------------------------------

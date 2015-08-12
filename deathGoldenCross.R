@@ -8,7 +8,7 @@ idxrange = 20 # of observations from current date
 proximity = 0.02 # distance threshold between long and short averages
 
 # Min 2 assets are required
-asset = c("twtr","BABA","BBBY") 
+asset = c("WLT","T","BABA","BBBY") 
 asset = append(asset,"^dji")
 
 endDate = Sys.Date()

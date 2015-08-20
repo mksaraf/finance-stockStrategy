@@ -1,20 +1,18 @@
 
-
+require(plyr)
 source('https://github.com/vishalhawa/utilities/raw/master/util.R')
 
 getCross<-function(asset,endDate = Sys.Date()){
 
 rollingAvgShort = 50
 rollingAvgLong = 200
-idxrange = 20 # of observations from current date 
+idxrange = 60 # window of observations from end date: 60 = Quarter 
 proximity = 0.01 # tolerance: distance threshold between long and short averages
-
-# Min 2 assets are required
-# asset = c("WLT","T","BABA","BBBY") 
+slopeSigF = 0.001 # Slope cannot be less than this number to be considered
 asset = append("^dji",as.character(asset))
 
 
-startDate = endDate - 2*rollingAvgLong # we need to take more dates than needed to avoid errors
+startDate = endDate - (1.5*idxrange) -1.5*rollingAvgLong # we need to take more dates as tradings days are less than calendar days
 
 st = mapply(SIMPLIFY=FALSE ,asset  ,FUN=function(x)tryCatch(getStockHist(stk=x,sdate=startDate,edate=endDate,pricetype="Adj.Close") ,error=function(e)  return(NA)))
 
@@ -35,9 +33,9 @@ percentileMatrix = (rollmeanShort-rollmeanLong)/rollmeanLong
 
 percentileMatrix.proximity = abs(percentileMatrix) < proximity
 
-slopeShort = diff(-1*rollmeanShort) # why multi -1
+slopeShort = round(1*diff(-1*rollmeanShort) /rollmeanShort[-idxrange,],digits = 3) # 
 
-slopeLong = diff(-1*rollmeanLong)
+slopeLong = round(1*diff(-1*rollmeanLong) /rollmeanLong[-idxrange,],digits = 3)
 
 
 # ifelse(slopeLong[1,] <0 & slopeShort[1,] <0,  print("Negative Slopes"),  ifelse(slopeLong[1,] >0 & slopeShort[1,] >0,print("Positive Slopes")  ,    print("Mixed Slopes")))
@@ -48,24 +46,63 @@ slopeLong = diff(-1*rollmeanLong)
 # Confirmed Crosses
 slopeMatrix = ifelse(slopeLong <0 & slopeShort <0 & (rollmeanShort[-idxrange,]<rollmeanLong[-idxrange,]), -1,  ifelse(slopeLong>0 & slopeShort>0 & (rollmeanShort[-idxrange,]>rollmeanLong[-idxrange,]) ,  1 ,  0))
 
-# This produces table of Death and Golden Cross
+# This produces internal table of Death and Golden Cross : Debug use only
  crossdf = as.data.frame(apply(slopeMatrix*percentileMatrix.proximity[1:idxrange-1,], c(1,2), function(x)(if(x>0) x="Golden Cross" else if(x<0) x="Death Cross" else x="NA")) )
 
  row.names(crossdf) <- stkval[1:idxrange-1,"^dji.date"]
+
+ # --- Creating Df for events : cross -----
  
-return (crossdf)
+ cross <- data.frame(day=as.Date(character()), stk=character(), type=character(),stringsAsFactors=FALSE) 
+ 
+ results = as.data.frame(slopeMatrix*percentileMatrix.proximity[1:idxrange-1,])
+ row.names(results) <- stkval[1:idxrange-1,"^dji.date"]
+ 
+  rnames = rownames(results)[ which(results==1,arr.ind = TRUE)[,1]]
+ cnames = colnames(results)[ which(results==1,arr.ind = TRUE)[,2]]
+ 
+ if (length(rnames) >0) cross = rbind(cross, data.frame(day=as.Date(rnames,format ="%Y-%m-%d" ),stk=gsub(".price","" ,cnames), type="G"))
+ 
+ rnames = rownames(results)[ which(results== -1,arr.ind = TRUE)[,1]]
+ cnames = colnames(results)[ which(results== -1,arr.ind = TRUE)[,2]]
+
+ if (length(rnames) >0) cross = rbind(cross, data.frame(day=as.Date(rnames,format ="%Y-%m-%d" ),stk=gsub(".price","" ,cnames), type="D"))
+
+ # temp =    (stkval[stkval$`^dji.date`%in%as.Date(rnames),  colnames(stkval)%in% cnames])
+
+ cross$day.P = apply(cross, 1,function(x)  (stkval[which(x["day"]==stkval[1]), paste0(x["stk"],".price")] ) ) 
+ # mapply(`[[`, dimnames(results),t(which(results==1,arr.ind = TRUE)))
+ 
+return (cross)
 }
+
+
 # -------------------Driver ---------------------------------
 
 
-require(plyr)
+
 library(RODBC)
 ch <- odbcConnect("portfolio")
-res <- sqlFetch(ch, "USStocks") #Fetch Query results to DF
+res <- sqlFetch(ch, "US Stocks Beta-High") #Fetch Query results to DF
+res <- rbind(sqlFetch(ch, "US Stocks Beta-Low"), sqlFetch(ch, "US Stocks Beta-High"))
 tickers <- res[,"symbol"]
-#tickers <- c("SAP","AA","AAPL")
-getCross(tickers[800:810])
-#(ldply(tickers, getCross))
+endObservationDate = Sys.Date()-100
+events = getCross(tickers[300:350],endObservationDate)
+events
+if(nrow(events)>1) {
+
+events = cbind(events,day20=events$dates+20,day40=events$dates+40, day60=events$dates+60)
+
+events$day20.P = apply(events,1,function(x){getRollingAvg(x["stk"],1,as.Date(x["day20"]),1) })
+events$day20.Percent = round(((events$day20.P/events$price) -1)*100,digits=2)
+events$day40.P = apply(events,1,function(x){getRollingAvg(x["stk"],1,as.Date(x["day40"]),1) })
+events$day40.Percent = round(((events$day40.P/events$price) -1)*100,digits = 2)
+events$day60.P = apply(events,1,function(x){getRollingAvg(x["stk"],1,as.Date(x["day60"]),1) })
+events$day60.Percent = round(((events$day60.P/events$price) -1)*100,digits = 2)
+events = events[,order(names(events))]
+events
+# getRollingAvg(asset = c("FFIV"),duration=15,endDate = as.Date("2015-06-25"),rollingperiod=1) 
+}
 
 close(ch)
 

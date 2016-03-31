@@ -4,8 +4,8 @@ source('https://github.com/vishalhawa/utilities/raw/master/util.R')
 
 getCross<-function(asset,endDate = Sys.Date()){
 
-rollingAvgShort = 70
-rollingAvgLong = 225
+rollingAvgShort = 40
+rollingAvgLong = 200
 idxrange = 45 # window of observations from end date: 60 = Quarter 
 proximity = 0.01 # tolerance: distance threshold between long and short averages
 slopeSigF = 0.001 # Slope cannot be less than this number to be considered
@@ -41,11 +41,6 @@ slopeShort = round(1*diff(-1*rollmeanShort) /rollmeanShort[-idxrange,],digits = 
 
 slopeLong = round(1*diff(-1*rollmeanLong) /rollmeanLong[-idxrange,],digits = 3)
 
-
-# ifelse(slopeLong[1,] <0 & slopeShort[1,] <0,  print("Negative Slopes"),  ifelse(slopeLong[1,] >0 & slopeShort[1,] >0,print("Positive Slopes")  ,    print("Mixed Slopes")))
-
-# the slopeMatrix provides wether long and short slopes are both positive , negative or Mixed : Potential Crosses
-# slopeMatrix = ifelse(slopeLong <0 & slopeShort <0, -1,  ifelse(slopeLong>0 & slopeShort>0,1  ,  0))
 # Confirmed Cases
 slopeMatrix = ifelse(slopeLong <0 & slopeShort <0 & (rollmeanShort[-idxrange,]<rollmeanLong[-idxrange,]), -1,  ifelse(slopeLong>0 & slopeShort>0 & (rollmeanShort[-idxrange,]>rollmeanLong[-idxrange,]) ,  1 ,  0))
 
@@ -82,18 +77,15 @@ return (cross)
 
 # -------------------Driver ---------------------------------
 
-
+setwd(paste0("C:/Users/",Sys.getenv("username"),"/Dropbox/Projects/RCode/finance-stockStrategy/"))
 
 library(RODBC)
-ch <- odbcConnect("portfolio")
-res <- sqlFetch(ch, "US Stocks Beta-High") #Fetch Query results to DF
+ch<-odbcDriverConnect("Driver={Microsoft Access Driver (*.mdb, *.accdb)};DBQ=../../FirmFinancials/USStocks.accdb")
 res <- rbind(sqlFetch(ch, "US Stocks Beta-Low"), sqlFetch(ch, "US Stocks Beta-High"))
 close(ch)
 
-endObservationDate = Sys.Date()-100
-#tickers <- res[,"symbol"]
-# Just to make stuff slower
-events = getCross(res[,"symbol"][801:828],endObservationDate)
+endObservationDate = Sys.Date()-90
+events = getCross(res[,"symbol"][801:804],endObservationDate)
 
 for(k in seq(1,800,by=200)){
   print(paste("Tickers",k,":",(k+199)))
@@ -107,7 +99,7 @@ length(unique((events[events$type=="G",])$stk))
 # Unique Cases--D---
 length(unique((events[events$type=="D",])$stk))
 
-
+# --------------ANALYZE the Events ----------------------------------------------
 if(nrow(events)>1) {
 #--Look only for first day of the events----
 events =  merge(aggregate(data=events,day ~stk,min),events,by=c("day","stk"))
@@ -130,7 +122,7 @@ events$day90.Percent = round(((events$day90.P/events$day.P) -1)*100,digits = 2)
 
 events = events[,order(names(events))]
 events
-# getRollingAvg(asset = c("FFIV"),duration=15,endDate = as.Date("2015-06-25"),rollingperiod=1) 
+
 }
 
 #-----------Improvising: Looking for peaks in ----------90 days Horizon ---------------
@@ -148,25 +140,25 @@ gcross.stats = data.frame(med15=median(gcross$day15.Percent),odds15=round(sum(gc
 dcross.stats = data.frame(med15=median(dcross$day15.Percent),odds15=round(sum(dcross$day15.Percent<0)/nrow(dcross),digits = 2),med40=median(dcross$day40.Percent),odds40=round(sum(dcross$day40.Percent<0)/nrow(dcross),digits = 2), med60=median(dcross$day60.Percent),odds60=round(sum(dcross$day60.Percent<0)/nrow(dcross),digits = 2),med90=median(dcross$day90.Percent),odds90=round(sum(dcross$day90.Percent<0)/nrow(dcross),digits = 2))
 
 rbind(gcross.stats,dcross.stats)
-# AT least Favourable once
+# ------>AT least Favourable once
 1-sum(apply(gcross[,grep("*.Percent",colnames(events))],1,function(x){x["day15.Percent"]<0 & x["day40.Percent"]<0 & x["day60.Percent"] <0 & x["day90.Percent"] <0}))/nrow(gcross)
 1-sum(apply(dcross[,grep("*.Percent",colnames(events))],1,function(x){x["day15.Percent"]>0 & x["day40.Percent"]>0 & x["day60.Percent"] >0 & x["day90.Percent"] >0}))/nrow(dcross)
 
-#-------GCROSS ------------------
+#-------GCROSS ----90 days Horizon--------------
 plot(gcross[,"peak.daysMax"],gcross[,"peak.max"]/gcross[,"day.P"])
 
-median(gcross[,"peak.max"]/gcross[,"day.P"])
-median(gcross[,"peak.daysMax"])
-paste("% Success:",100*(sum(gcross[,"peak.max"]/gcross[,"day.P"] >1)/nrow(gcross)),"%")
+paste("Median Peak (Golden ratio):",round(median(gcross[,"peak.max"]/gcross[,"day.P"]),digits = 3))
+paste("Median Days(Delay):",median(gcross[,"peak.daysMax"]))
+paste("% Success-Gold:",round(100*(sum(gcross[,"peak.max"]/gcross[,"day.P"] >1)/nrow(gcross)),digits = 2),"%")
 cor.test(gcross[,"peak.daysMax"],gcross[,"peak.max"]/gcross[,"day.P"])
 
 
-#-------DCROSS ------------------
+#-------DCROSS -----90 days Horizon-------------
 plot(dcross[,"peak.daysMin"],dcross[,"peak.min"]/dcross[,"day.P"])
 
-median(dcross[,"peak.min"]/dcross[,"day.P"])
-median(dcross[,"peak.daysMin"])
-paste("% Success:",100*(sum(dcross[,"peak.min"]/dcross[,"day.P"] <1)/nrow(dcross)),"%")
+paste("Median Peak (Death ratio):",round(median(dcross[,"peak.min"]/dcross[,"day.P"]),digits = 3))
+paste("Median Days(Delay):",median(dcross[,"peak.daysMin"]))
+paste("% Success-Death:",round(100*(sum(dcross[,"peak.min"]/dcross[,"day.P"] <1)/nrow(dcross)),digits = 2),"%")
 cor.test(dcross[,"peak.daysMin"],dcross[,"peak.min"]/dcross[,"day.P"])
 
 

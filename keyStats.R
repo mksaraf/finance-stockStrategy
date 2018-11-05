@@ -9,7 +9,7 @@ require(plyr)
 
 getAnalystOpinion <- function(symbol) {
 
-  yahoo.URL <- "http://finance.yahoo.com/q/ao?s="
+  yahoo.URL <- "http://finance.yahoo.com/q/ao?bypass=true&s="
   html_text <- htmlParse(paste(yahoo.URL, symbol, sep = ""), encoding="UTF-8")
   
   #search for <td> nodes anywhere that have class ‘yfnc_tablehead1′
@@ -27,7 +27,7 @@ getAnalystOpinion <- function(symbol) {
 
 getKeyStats <- function(symbol) {
  # print(symbol)
-  yahoo.URL <- "http://finance.yahoo.com/q/ks?s="
+  yahoo.URL <- "http://finance.yahoo.com/q/ks?bypass=true&s="
   html_text <- htmlParse(paste(yahoo.URL, symbol, sep = ""), encoding="UTF-8")
 
   #search for <td> nodes anywhere that have class ‘yfnc_tablehead1′
@@ -63,8 +63,10 @@ getShareStats<-function(symbol){
   
  prices = OHLC(getSymbols(symbol,from = startDate, to = endDate,env=NULL,warnings = FALSE))
  vol20 = volatility(prices,n=20)/sqrt(260) # this is daily volatility
- roll20 = rollapply(Cl(prices),width=20,align = "right",FUN = mean ) # align = "left" is fwd looking 
- roll90 = rollapply(Cl(prices),width=min(90,nrow(prices)),align = "right",FUN = mean )
+ # roll20 = rollapply(Cl(prices),width=20,align = "right",FUN = function(x){tail(x,1)/head(x,1) -1} ) # align = "left" is fwd looking 
+ # roll200 = rollapply(Cl(prices),width=min(200,nrow(prices)),align = "right",FUN = function(x){tail(x,1)/head(x,1) -1} )
+ roll20 = Delt(Cl(prices),k=min(20,nrow(prices)-1))
+ roll200 = Delt(Cl(prices),k=min(200,nrow(prices)-1))
  ClosePrice = getQuote(symbol)$Last
  dividends = getDividends(symbol,from = startDate, to = endDate,env=NULL,warnings = FALSE)
  if(length(dividends)>0){
@@ -72,7 +74,7 @@ getShareStats<-function(symbol){
      dividendYield = sum(dividends)/ClosePrice
      dividendChange = dividends[[nrow(dividends)]]-dividends[[1]] # [[]] gives me  numeric class
  }
- df=data.frame(vol20,roll20,roll90,ClosePrice,dividendRate,dividendYield,dividendChange)
+ df=data.frame(vol20,roll20,roll200,ClosePrice,dividendRate,dividendYield,dividendChange)
  colnames(df)<-c("Volatility20","RollingAvg20","RollingAVG","ClosePrice","DividendRate","DividendYield","DividendChange")
  return (df[nrow(df),])
 }
@@ -81,17 +83,19 @@ getShareStats<-function(symbol){
 processNumber<-function(x){
 
   x=gsub(",","",x)
-  x=gsub("%","/100",x)
+  x=gsub("%","/1",x) # Div by 1 is just to make it values compatible with Java program
   x=gsub("N/A","0",x)
+  x=gsub("K","*1000",x)
   x=gsub("M","*1000000",x)
   x=gsub("B","*1000000000",x)
+  x=gsub("T","*1000000000000",x)
   x=eval(parse(text=x))
   return(x)
 }
 
 
 
-
+########################## Driver ###############################################
 
 ch<-odbcDriverConnect("Driver={Microsoft Access Driver (*.mdb, *.accdb)};DBQ=../../FirmFinancials/USStocks.accdb")
 
